@@ -1,0 +1,26 @@
+耘翼无人机系统 位置AI管理开发分支1
+
+坐标系
+NED：北-东-地
+机体坐标系
+NED：北-东-地
+姿态
+抬头 pitch+
+右倾 roll+
+右旋 yaw+
+传感器
+4M 激光传感器 VL53L1X
+pmw3901 光流
+六轴 mpu mpu6500
+十轴 mpu 正点原子 提供气压、磁力
+
+
+故障分析
+=== RMT 通道诊断 ===
+SOC_RMT_TX_CANDIDATES_PER_GROUP = 4
+E (19754) rmt: rmt_tx_register_to_group(152): no free tx channels
+E (19759) rmt: rmt_new_tx_channel(286): register channel failed
+❌ 电机 2 号初始化失败, code=2
+❌ 电机初始化失败! 删除任务
+
+dshotrmt 在esp32-s3 四路的情况 需要把dshot_definitions.h的RMT_TX_BUFFER_SYMBOLS从64改成48 因为RAM 按照 48 x 32-bit 分成八个 block。
