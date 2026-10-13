@@ -76,7 +76,7 @@ namespace
 // ============================================================================
 //  任务入口
 // ============================================================================
-
+uint32_t loop_iteration = 0;
 void stabilizer_task(void *pvParameters)
 {
     (void)pvParameters;
@@ -118,6 +118,9 @@ void stabilizer_task(void *pvParameters)
         if (dt <= 0.0f || dt > 0.1f)
             dt = 0.001f;
         last_us = now_us;
+        loop_iteration++;
+        stabilizer_data.loop_iteration = loop_iteration;
+        stabilizer_data.timestamp_us = micros();
 
         // 3.2 读 EKF 状态
         state_t st;

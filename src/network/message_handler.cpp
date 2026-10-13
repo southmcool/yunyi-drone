@@ -365,11 +365,11 @@ void MessageHandler::handleControlCommand(const String &direction, float strengt
     }
     else if (direction == "SET_POS_X")
     {
-        // setPosX(strength);
+        setPosX(strength);
     }
     else if (direction == "SET_POS_Y")
     {
-        // setPosY(strength);
+        setPosY(strength);
     }
     else if (direction == "SET_CONTROL_MODE")
     {

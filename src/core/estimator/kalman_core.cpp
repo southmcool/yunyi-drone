@@ -362,15 +362,15 @@ void kalmanCorePredict(kalmanCoreData_t *kf,
     qNew[2] = dq[2] * kf->q[0] - dq[3] * kf->q[1] + dq[0] * kf->q[2] + dq[1] * kf->q[3];
     qNew[3] = dq[3] * kf->q[0] + dq[2] * kf->q[1] - dq[1] * kf->q[2] + dq[0] * kf->q[3];
 
-    // 地面缓拉回
-    if (!quadIsFlying)
-    {
-        const float keep = 1.0f - kalman::kRollPitchZeroReversion;
-        qNew[0] = keep * qNew[0] + kalman::kRollPitchZeroReversion * 1.0f;
-        qNew[1] = keep * qNew[1];
-        qNew[2] = keep * qNew[2];
-        qNew[3] = keep * qNew[3];
-    }
+    // // 地面缓拉回
+    // if (!quadIsFlying)
+    // {
+    //     const float keep = 1.0f - kalman::kRollPitchZeroReversion;
+    //     qNew[0] = keep * qNew[0] + kalman::kRollPitchZeroReversion * 1.0f;
+    //     qNew[1] = keep * qNew[1];
+    //     qNew[2] = keep * qNew[2];
+    //     qNew[3] = keep * qNew[3];
+    // }
 
     const float norm = std::sqrt(qNew[0] * qNew[0] + qNew[1] * qNew[1] + qNew[2] * qNew[2] + qNew[3] * qNew[3]);
     if (norm > 1e-12f)
@@ -483,6 +483,8 @@ void kalmanCoreInit(kalmanCoreData_t *kf)
 
     kf->mag_initialized = false;
     kf->mag_ref_yaw = 0.0f;
+
+    kf->tof_initialized = false;
 }
 
 // ============================================================================
@@ -599,8 +601,8 @@ void kalmanCoreExternalizeState(const kalmanCoreData_t *kf,
     {
         state->acc.x = kf->R[0][0] * acc->x + kf->R[0][1] * acc->y + kf->R[0][2] * acc->z;
         state->acc.y = kf->R[1][0] * acc->x + kf->R[1][1] * acc->y + kf->R[1][2] * acc->z;
-        // state->acc.z = kf->R[2][0] * acc->x + kf->R[2][1] * acc->y + kf->R[2][2] * acc->z + kalman::kGravity; // ← 不是 1.0f
-        state->acc.z = kf->R[2][0] * acc->x + kf->R[2][1] * acc->y + kf->R[2][2] * acc->z + 1.0f; // ← 不是 1.0f
+        state->acc.z = kf->R[2][0] * acc->x + kf->R[2][1] * acc->y + kf->R[2][2] * acc->z + kalman::kGravity; // ← 不是 1.0f
+        // state->acc.z = kf->R[2][0] * acc->x + kf->R[2][1] * acc->y + kf->R[2][2] * acc->z + 1.0f; // ← 不是 1.0f
         // BOOT_LOG_W(kMod, "state->acc.z%.4f", state->acc.z);
     }
     else
@@ -675,38 +677,41 @@ bool kalmanCoreIsWithinBounds(const kalmanCoreData_t *kf)
     return true;
 }
 
-// ============================================================================
-//  kalmanCoreUpdateWithTof
-//    一维高度观测（沿机体 -Z 轴）。Crazyflie 公式 + NED 适配。
-//      predictedDistance = -S[Z] / R[2][2]   （★ NED：S[Z] 是深度，取负得高度）
-//      h[Z] = -1 / R[2][2]                   （★ 对应符号）
-//    只在 |R[2][2]| > 0.1 且 R[2][2] > 0（机体大致正立）时更新。
-// ============================================================================
-
-void kalmanCoreUpdateWithTof(kalmanCoreData_t *kf,
-                             const tofMeasurement_t *tof)
+void kalmanCoreUpdateWithTof(
+    kalmanCoreData_t *kf,
+    const tofMeasurement_t *tof)
 {
     if (!kf || !tof)
         return;
 
-    // ★ 新增：观测 vs 预测差 > 0.5m 时跳过（跳变帧）
-    const float predicted = -kf->S[KC_STATE_Z] / kf->R[2][2];
-    if (std::fabs(tof->distance - predicted) > 0.5f)
-    {
+    // 先检查测量与姿态几何条件，避免除以接近零的 R[2][2]。
+    if (!std::isfinite(tof->distance) ||
+        !std::isfinite(tof->stdDev) ||
+        tof->distance <= 0.0f ||
+        tof->stdDev <= 0.0f)
         return;
-    }
 
-    // 机体倾斜 > 84° 时 TOF 打不到地面
-    if (std::fabs(kf->R[2][2]) <= 0.1f || kf->R[2][2] <= 0.0f)
+    if (!std::isfinite(kf->R[2][2]) ||
+        kf->R[2][2] <= 0.1f)
+        return;
+
+    const float predictedDistance =
+        -kf->S[KC_STATE_Z] / kf->R[2][2];
+
+    // 只有建立过有效高度估计后，才使用残差门限。
+    if (kf->tof_initialized &&
+        std::fabs(tof->distance - predictedDistance) > 0.5f)
         return;
 
     float H[KC_STATE_DIM] = {0};
-    H[KC_STATE_Z] = -1.0f / kf->R[2][2]; // ★ NED
+    H[KC_STATE_Z] = -1.0f / kf->R[2][2];
 
-    const float predictedDistance = -kf->S[KC_STATE_Z] / kf->R[2][2];
-    const float error = tof->distance - predictedDistance;
+    const float error =
+        tof->distance - predictedDistance;
 
     scalarUpdate(kf, H, error, tof->stdDev);
+
+    kf->tof_initialized = true;
 }
 
 // ============================================================================

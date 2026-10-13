@@ -63,8 +63,8 @@ namespace kalman
     constexpr float kMaxCovariance = 100.0f;
     constexpr float kMinCovariance = 1e-6f;
 
-    // 地面时姿态向初始姿态缓拉回，防止陀螺零偏累积
-    constexpr float kRollPitchZeroReversion = 0.001f;
+    // // 地面时姿态向初始姿态缓拉回，防止陀螺零偏累积
+    // constexpr float kRollPitchZeroReversion = 0.001f;
 }
 
 // ============================================================================
@@ -88,6 +88,7 @@ struct kalmanCoreData_t
     // ★ 新增：磁力计参考
     bool mag_initialized; // 是否已记录"上电瞬间的世界系磁力方向"
     float mag_ref_yaw;    // 参考方向 [rad]
+    bool tof_initialized;
 };
 
 // ============================================================================
